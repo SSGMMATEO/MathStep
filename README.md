@@ -130,3 +130,39 @@ Metodología de la Investigación · 2026
 ## 📄 Licencia
 
 Este proyecto es de uso académico. Distribuido bajo licencia Open Source.
+
+## 📄 Funcionalidades implementadas
+
+### Autenticación local con Room Database
+- Registro de usuario con nombre, correo y contraseña — la contraseña se almacena como hash SHA-256, nunca en texto plano
+- Inicio de sesión verificando que el hash de la contraseña ingresada coincida con el hash guardado en Room
+- Sesión persistente con SharedPreferences — al reabrir la app no vuelve a pedir login si ya había una sesión activa
+- Cierre de sesión disponible desde la pantalla principal
+
+### Validaciones de formulario
+- Correo obligatorio con verificación de formato mediante `Patterns.EMAIL_ADDRESS` de Android
+- Contraseña obligatoria con mínimo de 6 caracteres
+- Confirmación de contraseña en el registro (ambas deben coincidir)
+- Nombre de usuario obligatorio con mínimo de 2 caracteres
+- Mensajes de error específicos por campo visibles debajo de cada campo
+
+### Navegación
+- Al abrir la app detecta automáticamente si hay sesión activa y salta el login
+- Login exitoso navega a la pantalla principal sin posibilidad de regresar al login con el botón Atrás
+- Registro exitoso regresa al login para iniciar sesión con la cuenta creada
+
+### Arquitectura
+- **MVVM**: `AuthViewModel` maneja el estado de la UI, `AuthRepository` maneja los datos
+- **Room Database**: entidad `User` con tabla `users`, `UserDao` con operaciones de inserción y consulta
+- **StateFlow**: comunicación reactiva entre ViewModel y UI
+- **Jetpack Compose**: toda la interfaz de usuario sin layouts XML
+
+### Tecnologías utilizadas
+- Kotlin + Jetpack Compose
+- Room Database 2.6.1
+- ViewModel + StateFlow
+- SHA-256 via `MessageDigest` (Java estándar, sin dependencias extra)
+- SharedPreferences para persistencia de sesión
+
+<img width="377" height="800" alt="image" src="https://github.com/user-attachments/assets/78be95de-c125-47b2-abd8-382fb1bd9569" />
+
