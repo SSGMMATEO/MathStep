@@ -266,6 +266,14 @@ La conexión entre el solver y el guardado automático en historial
 | Update | `AlertDialog` con campos precargados | ✓ |
 | Delete | `AlertDialog` de confirmación + Snackbar con Deshacer | ✓ |
 
+<img width="357" height="782" alt="Captura de pantalla 2026-07-03 105811" src="https://github.com/user-attachments/assets/8d04cf60-779f-45dd-9b81-fe93a04eb7a2" />
+
+<img width="314" height="690" alt="image" src="https://github.com/user-attachments/assets/20ba0984-2e95-4b16-b7fa-959bc62d0e50" />
+
+<img width="314" height="690" alt="image" src="https://github.com/user-attachments/assets/696493e6-db7f-42f5-8f6e-b7c3d5144328" />
+
+<img width="314" height="690" alt="image" src="https://github.com/user-attachments/assets/aa020330-f6c3-455f-b9d2-113bdff89281" />
+
 ---
 
 ## API REST
@@ -308,6 +316,9 @@ programan.
 
 El canal de notificación se crea en `MathStepApplication.onCreate()` 
 para garantizar que existe antes de cualquier Worker o Activity.
+
+<img width="315" height="695" alt="image" src="https://github.com/user-attachments/assets/693238d7-7e61-424d-8ec4-72133c8cf33a" />
+
 
 ---
 
