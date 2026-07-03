@@ -4,19 +4,20 @@ import android.content.Context
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
+import com.sanchez.mathstep.data.local.dao.HistoryDao
 import com.sanchez.mathstep.data.local.dao.UserDao
+import com.sanchez.mathstep.data.local.entity.HistoryRecord
 import com.sanchez.mathstep.data.local.entity.User
 
-/**
- * Base de datos Room — Singleton.
- * version = 1: primera versión del esquema.
- * fallbackToDestructiveMigration: si cambias la versión, borra y recrea.
- * Aceptable para prototipo académico.
- */
-@Database(entities = [User::class], version = 1, exportSchema = false)
+@Database(
+    entities = [User::class, HistoryRecord::class],
+    version = 2,                          // sube a 2 por la nueva tabla
+    exportSchema = false
+)
 abstract class AppDatabase : RoomDatabase() {
 
     abstract fun userDao(): UserDao
+    abstract fun historyDao(): HistoryDao
 
     companion object {
         @Volatile private var INSTANCE: AppDatabase? = null
