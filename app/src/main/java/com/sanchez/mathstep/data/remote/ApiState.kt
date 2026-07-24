@@ -1,23 +1,24 @@
 package com.sanchez.mathstep.data.remote
 
-/**
- * ApiState — sealed class para los 3 estados de una llamada a API.
- *
- * sealed class: el compilador conoce todos los subtipos posibles.
- * Esto permite usar when(state) sin else, y el compilador avisa
- * si falta manejar algún caso.
- *
- * Idle:    estado inicial, no se ha hecho ninguna llamada.
- * Loading: la llamada está en curso, mostrar spinner.
- * Success: la llamada terminó bien, data contiene el resultado.
- * Error:   la llamada falló, message contiene el motivo.
- */
 sealed class ApiState {
     data object Idle    : ApiState()
     data object Loading : ApiState()
     data class  Success(
         val result: String,
-        val steps: List<String> = emptyList()
+        val steps: List<String> = emptyList(),
+        val graph: GraphData? = null
     ) : ApiState()
     data class  Error(val message: String)  : ApiState()
 }
+
+/**
+ * GraphData — coeficientes de una ecuación lineal (y = slope·x + intercept)
+ * junto con el valor del lado derecho (rightSide), usados para construir
+ * la URL de la gráfica con QuickChart.io. Solo se llena cuando la
+ * ecuación resuelta es lineal; para expresiones sin "x" queda null.
+ */
+data class GraphData(
+    val slope: Double,
+    val intercept: Double,
+    val rightSide: Double
+)

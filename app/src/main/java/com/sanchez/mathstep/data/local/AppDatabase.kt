@@ -11,7 +11,7 @@ import com.sanchez.mathstep.data.local.entity.User
 
 @Database(
     entities = [User::class, HistoryRecord::class],
-    version = 2,                          // sube a 2 por la nueva tabla
+    version = 3, // sube de 2 a 3 por el nuevo campo "steps" en HistoryRecord
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -24,11 +24,10 @@ abstract class AppDatabase : RoomDatabase() {
 
         fun getInstance(context: Context): AppDatabase =
             INSTANCE ?: synchronized(this) {
-                Room.databaseBuilder(
-                    context.applicationContext,
-                    AppDatabase::class.java,
-                    "mathstep_db"
-                )
+                Room.databaseBuilder(context.applicationContext, AppDatabase::class.java, "mathstep_db")
+                    // Aceptable para un prototipo académico: borra y recrea la tabla al
+                    // subir de versión. En producción real se escribirían Migration()
+                    // explícitas para no perder datos del usuario.
                     .fallbackToDestructiveMigration()
                     .build()
                     .also { INSTANCE = it }

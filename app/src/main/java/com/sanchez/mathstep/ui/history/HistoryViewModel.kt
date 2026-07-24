@@ -18,7 +18,10 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 /**
- * HistoryViewModel actualizado con CRUD completo.
+ * HistoryViewModel — CRUD unificado.
+ * saveEquation() es la ÚNICA función que calcula y persiste una ecuación,
+ * usada tanto por crear como por editar. Antes insert() y confirmEdit()
+ * tenían el mismo código de cálculo duplicado dos veces.
  */
 class HistoryViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -27,7 +30,7 @@ class HistoryViewModel(application: Application) : AndroidViewModel(application)
         HistoryRepository(dao)
     }
 
-    private val apiRepository = MathApiRepository()
+    private val apiRepository = MathApiRepository(application)
 
     private val _uiState = MutableStateFlow(HistoryUiState())
     val uiState: StateFlow<HistoryUiState> = _uiState.asStateFlow()
@@ -38,96 +41,68 @@ class HistoryViewModel(application: Application) : AndroidViewModel(application)
             .launchIn(viewModelScope)
     }
 
-    // ── CREATE / UPDATE ──────────────────────────────────────
+    fun requestCreate() = _uiState.update { it.copy(dialog = HistoryDialog.Create) }
+    fun requestEdit(record: HistoryRecord) = _uiState.update { it.copy(dialog = HistoryDialog.Edit(record)) }
+    fun dismissDialog() = _uiState.update { it.copy(dialog = null, saveError = null) }
 
-    fun requestCreate() {
-        _uiState.update { it.copy(showCreateDialog = true) }
-    }
+    fun requestView(record: HistoryRecord) = _uiState.update { it.copy(recordToView = record) }
+    fun dismissView() = _uiState.update { it.copy(recordToView = null) }
 
-    fun dismissCreate() {
-        _uiState.update { it.copy(showCreateDialog = false) }
-    }
-
-    fun requestEdit(record: HistoryRecord) {
-        _uiState.update { it.copy(recordToEdit = record, showEditDialog = true) }
-    }
-
-    fun confirmEdit(equation: String) {
-        val original = _uiState.value.recordToEdit
+    /**
+     * Único punto de cálculo + guardado del CRUD manual. La ecuación
+     * siempre es editable; el resultado se recalcula automáticamente
+     * y NUNCA se edita a mano.
+     */
+    fun saveEquation(equation: String, existing: HistoryRecord? = null) {
         viewModelScope.launch {
-            val apiResult = apiRepository.evaluate(equation)
-            val resultText = if (apiResult is ApiState.Success) {
-                // Notificar al editar si es exitoso
-                NotificationScheduler.triggerResolutionNotification(
-                    getApplication(),
-                    equation,
-                    apiResult.result
-                )
-                apiResult.result
-            } else "Error en cálculo"
+            _uiState.update { it.copy(isSaving = true, saveError = null) }
 
-            if (original != null) {
-                // UPDATE
-                repository.update(original.copy(equation = equation, result = resultText))
-            } else {
-                // CREATE
-                repository.insert(HistoryRecord(equation = equation, result = resultText))
+            when (val apiResult = apiRepository.evaluate(equation)) {
+                is ApiState.Success -> {
+                    val stepsJoined = HistoryRecord.joinSteps(apiResult.steps)
+                    if (existing != null) {
+                        repository.update(existing.copy(equation = equation, result = apiResult.result, steps = stepsJoined))
+                    } else {
+                        repository.insert(HistoryRecord(equation = equation, result = apiResult.result, steps = stepsJoined))
+                        // Solo se notifica al crear desde el historial directamente;
+                        // si viene del Solver, saveFromSolver() no vuelve a notificar
+                        // (el Solver ya notificó al calcular).
+                        NotificationScheduler.triggerResolutionNotification(getApplication(), equation, apiResult.result)
+                    }
+                    _uiState.update { it.copy(isSaving = false, dialog = null) }
+                }
+                is ApiState.Error -> {
+                    _uiState.update { it.copy(isSaving = false, saveError = apiResult.message) }
+                }
+                else -> Unit
             }
         }
-        _uiState.update { it.copy(recordToEdit = null, showEditDialog = false) }
     }
 
-    fun dismissEdit() {
-        _uiState.update { it.copy(recordToEdit = null, showEditDialog = false) }
-    }
-
-    // Método directo usado por SolverScreen y HomeScreen
-    fun insert(equation: String, result: String? = null) {
+    /**
+     * Guarda un resultado que YA fue calculado en SolverScreen (con sus
+     * pasos), sin volver a llamar la API ni disparar otra notificación.
+     */
+    fun saveFromSolver(equation: String, result: String, steps: List<String>) {
         viewModelScope.launch {
-            val finalResult = if (result != null) {
-                result
-            } else {
-                val apiResult = apiRepository.evaluate(equation)
-                if (apiResult is ApiState.Success) {
-                    // Notificar cuando se calcula desde el Home o Historial
-                    NotificationScheduler.triggerResolutionNotification(
-                        getApplication(),
-                        equation,
-                        apiResult.result
-                    )
-                    apiResult.result
-                } else "Error en cálculo"
-            }
-            repository.insert(HistoryRecord(equation = equation, result = finalResult))
+            repository.insert(HistoryRecord(equation = equation, result = result, steps = HistoryRecord.joinSteps(steps)))
         }
     }
 
-    // ── DELETE ────────────────────────────────────────────────
-    fun requestDelete(record: HistoryRecord) {
-        _uiState.update { it.copy(recordToDelete = record) }
-    }
+    fun requestDelete(record: HistoryRecord) = _uiState.update { it.copy(recordToDelete = record) }
+    fun dismissDelete() = _uiState.update { it.copy(recordToDelete = null) }
 
     fun confirmDelete() {
         val record = _uiState.value.recordToDelete ?: return
-        viewModelScope.launch {
-            repository.delete(record)
-        }
+        viewModelScope.launch { repository.delete(record) }
         _uiState.update { it.copy(recordToDelete = null, undoRecord = record) }
-    }
-
-    fun dismissDelete() {
-        _uiState.update { it.copy(recordToDelete = null) }
     }
 
     fun undoDelete() {
         val record = _uiState.value.undoRecord ?: return
-        viewModelScope.launch {
-            repository.insert(record.copy(id = 0))
-        }
+        viewModelScope.launch { repository.insert(record.copy(id = 0)) }
         _uiState.update { it.copy(undoRecord = null) }
     }
 
-    fun clearUndo() {
-        _uiState.update { it.copy(undoRecord = null) }
-    }
+    fun clearUndo() = _uiState.update { it.copy(undoRecord = null) }
 }

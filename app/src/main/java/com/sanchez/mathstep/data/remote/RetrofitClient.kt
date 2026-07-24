@@ -3,21 +3,20 @@ package com.sanchez.mathstep.data.remote
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
-import retrofit2.converter.gson.GsonConverterFactory
+import retrofit2.converter.scalars.ScalarsConverterFactory
+import java.util.concurrent.TimeUnit
 
 /**
  * RetrofitClient — Singleton del cliente HTTP.
  *
- * Por qué Singleton:
- *   Crear un cliente Retrofit es costoso (crea thread pools, parsers,
- *   conexiones). Un Singleton garantiza que toda la app reutiliza
- *   la misma instancia.
+ * IMPORTANTE (bug corregido): MathJS devuelve texto plano (ej. "4"), no
+ * JSON. Antes se usaba GsonConverterFactory, que espera JSON válido
+ * (como "\"4\""); con texto plano eso fallaba en tiempo de ejecución.
+ * ScalarsConverterFactory maneja respuestas String/texto plano directamente.
  *
- * HttpLoggingInterceptor: registra en Logcat cada request y response
- * completos. Solo activo en debug; en producción se elimina.
- *
- * GsonConverterFactory: aunque la respuesta de MathJS es texto plano,
- * se incluye para cuando se agregue otra API con JSON.
+ * También se agregaron timeouts: sin ellos, una red lenta o caída dejaba
+ * la app esperando indefinidamente en vez de fallar rápido y usar el
+ * evaluador local.
  */
 object RetrofitClient {
 
@@ -29,13 +28,15 @@ object RetrofitClient {
 
     private val okHttpClient = OkHttpClient.Builder()
         .addInterceptor(loggingInterceptor)
+        .connectTimeout(8, TimeUnit.SECONDS)
+        .readTimeout(8, TimeUnit.SECONDS)
         .build()
 
     val mathApi: MathApiService by lazy {
         Retrofit.Builder()
             .baseUrl(BASE_URL)
             .client(okHttpClient)
-            .addConverterFactory(GsonConverterFactory.create())
+            .addConverterFactory(ScalarsConverterFactory.create())
             .build()
             .create(MathApiService::class.java)
     }

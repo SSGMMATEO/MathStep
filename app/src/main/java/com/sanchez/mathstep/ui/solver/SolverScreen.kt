@@ -20,8 +20,12 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import coil.compose.AsyncImage
 import com.sanchez.mathstep.data.remote.ApiState
+import com.sanchez.mathstep.ui.components.AppBottomBar
+import com.sanchez.mathstep.ui.components.AppScreen
 import com.sanchez.mathstep.ui.history.HistoryViewModel
+import com.sanchez.mathstep.util.GraphUtils
 import kotlinx.coroutines.launch
 
 private val Primary    = Color(0xFF3F51B5)
@@ -30,9 +34,17 @@ private val Background = Color(0xFFFAFAFA)
 private val ErrorColor = Color(0xFFB00020)
 private val Gray       = Color(0xFF757575)
 
+/**
+ * SolverScreen — ÚNICO punto de cálculo de la app. Antes existían dos
+ * flujos redundantes (la caja rápida de Home y esta pantalla). Ahora
+ * todo cálculo pasa por aquí y siempre muestra los pasos. El guardado
+ * respeta la preferencia "Guardar automáticamente" de Configuración.
+ */
 @Composable
 fun SolverScreen(
     onNavigateBack: () -> Unit,
+    onNavigate: (AppScreen) -> Unit,
+    autoSave: Boolean,
     viewModel: SolverViewModel = viewModel(),
     historyViewModel: HistoryViewModel = viewModel()
 ) {
@@ -43,6 +55,16 @@ fun SolverScreen(
     val scope = rememberCoroutineScope()
     var expression by remember { mutableStateOf("") }
     var expressionError by remember { mutableStateOf<String?>(null) }
+    var savedForExpression by remember { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(apiState, autoSave) {
+        val state = apiState
+        if (autoSave && state is ApiState.Success && savedForExpression != expression) {
+            historyViewModel.saveFromSolver(expression, state.result, state.steps)
+            savedForExpression = expression
+            scope.launch { snackbarHostState.showSnackbar("Guardado automáticamente en historial") }
+        }
+    }
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
@@ -50,78 +72,56 @@ fun SolverScreen(
         topBar = {
             Surface(color = Primary) {
                 Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 8.dp, vertical = 12.dp),
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 12.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Regresar",
-                            tint = Color.White
-                        )
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Regresar", tint = Color.White)
                     }
-                    Text(
-                        text = "Resolver Ecuación",
-                        fontSize = 20.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = Color.White,
-                        modifier = Modifier.padding(start = 8.dp)
-                    )
+                    Text("Resolver Ecuación", fontSize = 20.sp, fontWeight = FontWeight.SemiBold,
+                        color = Color.White, modifier = Modifier.padding(start = 8.dp))
                 }
             }
-        }
+        },
+        bottomBar = { AppBottomBar(current = AppScreen.HOME, onNavigate = onNavigate) }
     ) { innerPadding ->
         Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
-                .verticalScroll(scrollState)
-                .padding(24.dp),
+            modifier = Modifier.fillMaxSize().padding(innerPadding).verticalScroll(scrollState).padding(24.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(Modifier.height(16.dp))
 
             Text(
-                text = "Ingresa una ecuación completa (ej: 5x + 2 = 10) o una expresión para obtener el resultado y los pasos.",
-                fontSize = 14.sp,
-                color = Gray,
-                textAlign = TextAlign.Center
+                text = "Ingresa una ecuación completa (ej: 5x + 2 = 10) o una expresión. " +
+                        "Las ecuaciones lineales y operaciones simples se resuelven sin internet; " +
+                        "expresiones más complejas usan una API externa si hay conexión.",
+                fontSize = 14.sp, color = Gray, textAlign = TextAlign.Center
             )
 
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(Modifier.height(24.dp))
 
             OutlinedTextField(
                 value = expression,
                 onValueChange = {
                     expression = it
                     expressionError = null
+                    savedForExpression = null
                     viewModel.resetState()
                 },
                 label = { Text("Ecuación o expresión (ej: 5x + 2 = 12)") },
                 isError = expressionError != null,
-                supportingText = {
-                    expressionError?.let {
-                        Text(it, color = ErrorColor, fontSize = 12.sp)
-                    }
-                },
+                supportingText = { expressionError?.let { Text(it, color = ErrorColor, fontSize = 12.sp) } },
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                keyboardActions = KeyboardActions(
-                    onDone = { focusManager.clearFocus() }
-                ),
+                keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() }),
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
                 colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor   = Primary,
-                    unfocusedBorderColor = Gray,
-                    focusedLabelColor    = Primary,
-                    cursorColor          = Primary,
-                    errorBorderColor     = ErrorColor
+                    focusedBorderColor = Primary, unfocusedBorderColor = Gray,
+                    focusedLabelColor = Primary, cursorColor = Primary, errorBorderColor = ErrorColor
                 )
             )
 
-            Spacer(modifier = Modifier.height(20.dp))
+            Spacer(Modifier.height(20.dp))
 
             Button(
                 onClick = {
@@ -133,108 +133,90 @@ fun SolverScreen(
                     }
                 },
                 enabled = apiState !is ApiState.Loading,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(52.dp),
+                modifier = Modifier.fillMaxWidth().height(52.dp),
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = Primary,
-                    contentColor   = Color.White,
+                    containerColor = Primary, contentColor = Color.White,
                     disabledContainerColor = Primary.copy(alpha = 0.6f)
                 )
             ) {
                 if (apiState is ApiState.Loading) {
-                    CircularProgressIndicator(
-                        color = Color.White,
-                        modifier = Modifier.size(22.dp),
-                        strokeWidth = 2.dp
-                    )
+                    CircularProgressIndicator(color = Color.White, modifier = Modifier.size(22.dp), strokeWidth = 2.dp)
                 } else {
                     Text("Resolver", fontSize = 16.sp, fontWeight = FontWeight.Medium)
                 }
             }
 
-            Spacer(modifier = Modifier.height(28.dp))
+            Spacer(Modifier.height(28.dp))
 
             when (val state = apiState) {
                 is ApiState.Idle -> Unit
-                is ApiState.Loading -> {
-                    CircularProgressIndicator(color = Primary)
-                }
+                is ApiState.Loading -> CircularProgressIndicator(color = Primary)
                 is ApiState.Success -> {
                     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                         ElevatedCard(
                             modifier = Modifier.fillMaxWidth(),
-                            colors = CardDefaults.elevatedCardColors(
-                                containerColor = Color(0xFFE8F5E9)
-                            )
+                            colors = CardDefaults.elevatedCardColors(containerColor = Color(0xFFE8F5E9))
                         ) {
-                            Row(
-                                modifier = Modifier.padding(20.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
+                            Row(modifier = Modifier.padding(20.dp), verticalAlignment = Alignment.CenterVertically) {
                                 Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        text = "Resultado verificado",
-                                        fontSize = 13.sp,
-                                        color = Secondary,
-                                        fontWeight = FontWeight.SemiBold
-                                    )
-                                    Spacer(modifier = Modifier.height(8.dp))
-                                    Text(
-                                        text = state.result,
-                                        fontSize = 28.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = Secondary
-                                    )
-                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text("Resultado verificado", fontSize = 13.sp, color = Secondary, fontWeight = FontWeight.SemiBold)
+                                    Spacer(Modifier.height(8.dp))
+                                    Text(state.result, fontSize = 28.sp, fontWeight = FontWeight.Bold, color = Secondary)
+                                    Spacer(Modifier.height(4.dp))
                                     val isEquation = state.result.startsWith("x =")
-                                    Text(
-                                        text = if (isEquation) "Resolución local" else "Fuente: api.mathjs.org",
-                                        fontSize = 11.sp,
-                                        color = Gray
-                                    )
+                                    Text(if (isEquation) "Resolución local" else "Fuente: api.mathjs.org", fontSize = 11.sp, color = Gray)
                                 }
 
-                                IconButton(
-                                    onClick = {
-                                        historyViewModel.insert(expression, state.result)
-                                        scope.launch {
-                                            snackbarHostState.showSnackbar("Guardado en el historial")
-                                        }
-                                    },
-                                    colors = IconButtonDefaults.iconButtonColors(
-                                        containerColor = Secondary,
-                                        contentColor = Color.White
+                                if (!autoSave) {
+                                    val alreadySaved = savedForExpression == expression
+                                    IconButton(
+                                        onClick = {
+                                            historyViewModel.saveFromSolver(expression, state.result, state.steps)
+                                            savedForExpression = expression
+                                            scope.launch { snackbarHostState.showSnackbar("Guardado en el historial") }
+                                        },
+                                        enabled = !alreadySaved,
+                                        colors = IconButtonDefaults.iconButtonColors(
+                                            containerColor = if (alreadySaved) Gray else Secondary,
+                                            contentColor = Color.White
+                                        )
+                                    ) {
+                                        Icon(Icons.Default.Save, contentDescription = "Guardar")
+                                    }
+                                }
+                            }
+                        }
+
+                        state.graph?.let { graph ->
+                            Text(
+                                "Gráfica de la ecuación", fontSize = 16.sp, fontWeight = FontWeight.Bold,
+                                color = Primary, modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Start
+                            )
+                            ElevatedCard(modifier = Modifier.fillMaxWidth()) {
+                                Column(modifier = Modifier.padding(12.dp)) {
+                                    AsyncImage(
+                                        model = GraphUtils.buildLinearChartUrl(graph.slope, graph.intercept, graph.rightSide),
+                                        contentDescription = "Gráfica de la ecuación",
+                                        modifier = Modifier.fillMaxWidth().height(220.dp)
                                     )
-                                ) {
-                                    Icon(Icons.Default.Save, contentDescription = "Guardar")
+                                    Text(
+                                        "Generado con QuickChart.io — requiere internet. Si no carga, el resultado y los pasos siguen disponibles sin conexión.",
+                                        fontSize = 11.sp, color = Gray, modifier = Modifier.padding(top = 6.dp)
+                                    )
                                 }
                             }
                         }
 
                         if (state.steps.isNotEmpty()) {
-                            Text(
-                                text = "Pasos de resolución",
-                                fontSize = 16.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Primary,
-                                modifier = Modifier.fillMaxWidth(),
-                                textAlign = TextAlign.Start
-                            )
+                            Text("Pasos de resolución", fontSize = 16.sp, fontWeight = FontWeight.Bold,
+                                color = Primary, modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Start)
 
-                            state.steps.forEachIndexed { index, step ->
+                            state.steps.forEach { step ->
                                 ElevatedCard(
                                     modifier = Modifier.fillMaxWidth(),
-                                    colors = CardDefaults.elevatedCardColors(
-                                        containerColor = Color.White
-                                    )
+                                    colors = CardDefaults.elevatedCardColors(containerColor = Color.White)
                                 ) {
-                                    Text(
-                                        text = step,
-                                        modifier = Modifier.padding(16.dp),
-                                        fontSize = 14.sp,
-                                        color = Color.Black
-                                    )
+                                    Text(step, modifier = Modifier.padding(16.dp), fontSize = 14.sp, color = Color.Black)
                                 }
                             }
                         }
@@ -243,29 +225,14 @@ fun SolverScreen(
                 is ApiState.Error -> {
                     ElevatedCard(
                         modifier = Modifier.fillMaxWidth(),
-                        colors = CardDefaults.elevatedCardColors(
-                            containerColor = Color(0xFFFFEBEE)
-                        )
+                        colors = CardDefaults.elevatedCardColors(containerColor = Color(0xFFFFEBEE))
                     ) {
                         Column(modifier = Modifier.padding(20.dp)) {
-                            Text(
-                                text = "Error de conexión",
-                                fontSize = 13.sp,
-                                color = ErrorColor,
-                                fontWeight = FontWeight.SemiBold
-                            )
-                            Spacer(modifier = Modifier.height(6.dp))
-                            Text(
-                                text = state.message,
-                                fontSize = 14.sp,
-                                color = ErrorColor
-                            )
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Text(
-                                text = "El solver local sigue disponible sin conexión.",
-                                fontSize = 12.sp,
-                                color = Gray
-                            )
+                            Text("Error de conexión", fontSize = 13.sp, color = ErrorColor, fontWeight = FontWeight.SemiBold)
+                            Spacer(Modifier.height(6.dp))
+                            Text(state.message, fontSize = 14.sp, color = ErrorColor)
+                            Spacer(Modifier.height(8.dp))
+                            Text("El solver local sigue disponible sin conexión.", fontSize = 12.sp, color = Gray)
                         }
                     }
                 }

@@ -86,7 +86,7 @@ fun LoginScreen(
                 emailError = "El correo es obligatorio"
                 isValid = false
             }
-            !android.util.Patterns.EMAIL_ADDRESS.matcher(email).matches() -> {
+            !com.sanchez.mathstep.util.Validators.isValidEmail(email) -> {
                 emailError = "Ingresa un correo válido"
                 isValid = false
             }
@@ -96,7 +96,7 @@ fun LoginScreen(
                 passwordError = "La contraseña es obligatoria"
                 isValid = false
             }
-            password.length < 6 -> {
+            !com.sanchez.mathstep.util.Validators.isValidPassword(password) -> {
                 passwordError = "La contraseña debe tener al menos 6 caracteres"
                 isValid = false
             }

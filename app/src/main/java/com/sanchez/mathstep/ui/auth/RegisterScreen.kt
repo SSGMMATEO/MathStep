@@ -70,9 +70,8 @@ fun RegisterScreen(
         passwordError = null; confirmError = null
         var isValid = true
 
-        // Tabla del entregable: Nombre → No vacío, mínimo 2 caracteres
         when {
-            username.isBlank() || username.trim().length < 2 -> {
+            username.isBlank() || !com.sanchez.mathstep.util.Validators.isValidUsername(username) -> {
                 usernameError = "Ingresa tu nombre completo"
                 isValid = false
             }
@@ -82,7 +81,7 @@ fun RegisterScreen(
                 emailError = "El correo es obligatorio"
                 isValid = false
             }
-            !android.util.Patterns.EMAIL_ADDRESS.matcher(email).matches() -> {
+            !com.sanchez.mathstep.util.Validators.isValidEmail(email) -> {
                 emailError = "Ingresa un correo válido"
                 isValid = false
             }
@@ -92,12 +91,14 @@ fun RegisterScreen(
                 passwordError = "La contraseña es obligatoria"
                 isValid = false
             }
-            password.length < 6 -> {
+            !com.sanchez.mathstep.util.Validators.isValidPassword(password) -> {
                 passwordError = "La contraseña debe tener al menos 6 caracteres"
                 isValid = false
             }
         }
-        if (password.length >= 6 && confirmPassword != password) {
+        if (com.sanchez.mathstep.util.Validators.isValidPassword(password) &&
+            !com.sanchez.mathstep.util.Validators.passwordsMatch(password, confirmPassword)
+        ) {
             confirmError = "Las contraseñas no coinciden"
             isValid = false
         }

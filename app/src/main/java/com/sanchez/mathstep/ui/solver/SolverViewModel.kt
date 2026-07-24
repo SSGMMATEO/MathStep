@@ -11,12 +11,9 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
-/**
- * SolverViewModel — maneja la verificación de resultados vía API.
- */
 class SolverViewModel(application: Application) : AndroidViewModel(application) {
 
-    private val repository = MathApiRepository()
+    private val repository = MathApiRepository(application)
 
     private val _apiState = MutableStateFlow<ApiState>(ApiState.Idle)
     val apiState: StateFlow<ApiState> = _apiState.asStateFlow()
@@ -29,16 +26,10 @@ class SolverViewModel(application: Application) : AndroidViewModel(application) 
             _apiState.value = resultState
 
             if (resultState is ApiState.Success) {
-                NotificationScheduler.triggerResolutionNotification(
-                    getApplication(),
-                    expression,
-                    resultState.result
-                )
+                NotificationScheduler.triggerResolutionNotification(getApplication(), expression, resultState.result)
             }
         }
     }
 
-    fun resetState() {
-        _apiState.value = ApiState.Idle
-    }
+    fun resetState() { _apiState.value = ApiState.Idle }
 }
